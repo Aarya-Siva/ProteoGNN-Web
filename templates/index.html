@@ -1,0 +1,1490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProteoGNN - Protein Misfolding Prediction</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- 3Dmol.js for molecular visualization -->
+    <script src="https://3Dmol.org/build/3Dmol-min.js"></script>
+
+    <!-- Chart.js for statistics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-tertiary: #1a1a24;
+            --bg-card: #16161f;
+            --border-color: #2a2a3a;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0b0;
+            --text-muted: #6a6a7a;
+            --accent-primary: #6366f1;
+            --accent-secondary: #818cf8;
+            --accent-glow: rgba(99, 102, 241, 0.3);
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --gradient-1: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%);
+            --gradient-2: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
+            --shadow-glow: 0 0 40px rgba(99, 102, 241, 0.15);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Animated background */
+        .bg-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background:
+                radial-gradient(ellipse at 20% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(139, 92, 246, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(6, 182, 212, 0.05) 0%, transparent 70%);
+        }
+
+        /* Header */
+        header {
+            padding: 1.5rem 2rem;
+            background: rgba(10, 10, 15, 0.8);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            max-width: 1600px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logo-icon {
+            width: 48px;
+            height: 48px;
+            background: var(--gradient-1);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            box-shadow: var(--shadow-glow);
+        }
+
+        .logo h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: var(--gradient-1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .logo-subtitle {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        .header-links {
+            display: flex;
+            gap: 1.5rem;
+            align-items: center;
+        }
+
+        .header-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: color 0.2s;
+        }
+
+        .header-links a:hover {
+            color: var(--accent-secondary);
+        }
+
+        /* Main Layout */
+        .main-container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 2rem;
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            gap: 2rem;
+            min-height: calc(100vh - 80px);
+        }
+
+        /* Sidebar */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.5rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-glow);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .card-icon {
+            width: 36px;
+            height: 36px;
+            background: var(--bg-tertiary);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.125rem;
+        }
+
+        .card-title {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        /* Upload Section */
+        .upload-zone {
+            border: 2px dashed var(--border-color);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: var(--bg-tertiary);
+        }
+
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: var(--accent-primary);
+            background: rgba(99, 102, 241, 0.05);
+        }
+
+        .upload-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            opacity: 0.6;
+        }
+
+        .upload-text {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .upload-hint {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+
+        /* Form Elements */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.8125rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            font-family: 'JetBrains Mono', monospace;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        .form-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.25rem;
+            border-radius: 10px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+            font-family: inherit;
+        }
+
+        .btn-primary {
+            background: var(--gradient-1);
+            color: white;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+
+        .btn-full {
+            width: 100%;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        /* Quick Actions */
+        .quick-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+        }
+
+        .quick-btn {
+            padding: 0.875rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            color: var(--text-secondary);
+            font-size: 0.8125rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+
+        .quick-btn:hover {
+            background: rgba(99, 102, 241, 0.1);
+            border-color: var(--accent-primary);
+            color: var(--text-primary);
+        }
+
+        .quick-btn-icon {
+            display: block;
+            font-size: 1.25rem;
+            margin-bottom: 0.375rem;
+        }
+
+        /* Main Content */
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        /* Viewer */
+        .viewer-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            overflow: hidden;
+            flex: 1;
+            min-height: 500px;
+            position: relative;
+        }
+
+        .viewer-header {
+            padding: 1rem 1.5rem;
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .viewer-title {
+            font-size: 0.9375rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .viewer-controls {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .viewer-btn {
+            padding: 0.5rem 0.75rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .viewer-btn:hover {
+            background: var(--bg-card);
+            color: var(--text-primary);
+        }
+
+        .viewer-btn.active {
+            background: var(--accent-primary);
+            border-color: var(--accent-primary);
+            color: white;
+        }
+
+        #viewer {
+            width: 100%;
+            height: calc(100% - 56px);
+            min-height: 450px;
+        }
+
+        .viewer-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-muted);
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .viewer-placeholder-icon {
+            font-size: 4rem;
+            margin-bottom: 1.5rem;
+            opacity: 0.3;
+        }
+
+        .viewer-placeholder h3 {
+            font-size: 1.125rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        /* Results Panel */
+        .results-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+
+        /* Stats Cards */
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.25rem;
+        }
+
+        .stat-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .stat-label {
+            font-size: 0.8125rem;
+            color: var(--text-muted);
+        }
+
+        .stat-badge {
+            padding: 0.25rem 0.625rem;
+            border-radius: 6px;
+            font-size: 0.6875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .stat-badge.high { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+        .stat-badge.medium { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
+        .stat-badge.low { background: rgba(16, 185, 129, 0.15); color: var(--success); }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .stat-description {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* Risk Distribution */
+        .risk-distribution {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .risk-bar {
+            height: 8px;
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+
+        .risk-bar.high { background: var(--danger); }
+        .risk-bar.medium { background: var(--warning); }
+        .risk-bar.low { background: var(--success); }
+
+        /* Residue Table */
+        .residue-table-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            overflow: hidden;
+        }
+
+        .table-header {
+            padding: 1rem 1.5rem;
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .table-title {
+            font-size: 0.9375rem;
+            font-weight: 600;
+        }
+
+        .table-search {
+            padding: 0.5rem 0.875rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 0.8125rem;
+            width: 200px;
+        }
+
+        .residue-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .residue-table th {
+            padding: 0.875rem 1rem;
+            text-align: left;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .residue-table td {
+            padding: 0.75rem 1rem;
+            font-size: 0.8125rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .residue-table tr:hover {
+            background: rgba(99, 102, 241, 0.05);
+        }
+
+        .residue-name {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 500;
+        }
+
+        .probability-bar {
+            width: 100%;
+            height: 6px;
+            background: var(--bg-tertiary);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .probability-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s;
+        }
+
+        .risk-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+            padding: 0.25rem 0.625rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .risk-indicator.high {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--danger);
+        }
+
+        .risk-indicator.medium {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--warning);
+        }
+
+        .risk-indicator.low {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--success);
+        }
+
+        .risk-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        /* Loading State */
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(10, 10, 15, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+
+        .loading-spinner {
+            width: 48px;
+            height: 48px;
+            border: 3px solid var(--border-color);
+            border-top-color: var(--accent-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            margin-top: 1rem;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        /* Hidden */
+        .hidden {
+            display: none !important;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .main-container {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                flex-direction: row;
+                flex-wrap: wrap;
+            }
+
+            .sidebar .card {
+                flex: 1;
+                min-width: 300px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .main-container {
+                padding: 1rem;
+            }
+
+            .quick-actions {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Toast Notifications */
+        .toast-container {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .toast {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1rem 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .toast.success { border-left: 3px solid var(--success); }
+        .toast.error { border-left: 3px solid var(--danger); }
+        .toast.info { border-left: 3px solid var(--accent-primary); }
+
+        /* Color Legend */
+        .color-legend {
+            display: flex;
+            gap: 1.5rem;
+            padding: 1rem;
+            background: var(--bg-tertiary);
+            border-radius: 10px;
+            margin-top: 1rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+        }
+
+        .legend-color.high { background: var(--danger); }
+        .legend-color.medium { background: var(--warning); }
+        .legend-color.low { background: var(--success); }
+
+        /* Export Menu */
+        .export-dropdown {
+            position: relative;
+        }
+
+        .export-menu {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 0.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 0.5rem;
+            min-width: 180px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            z-index: 100;
+        }
+
+        .export-menu-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            font-size: 0.8125rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .export-menu-item:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        /* Table scrollable container */
+        .table-scroll {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-animation"></div>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">🧬</div>
+                <div>
+                    <h1>ProteoGNN</h1>
+                    <div class="logo-subtitle">Protein Misfolding Prediction</div>
+                </div>
+            </div>
+            <div class="header-links">
+                <a href="https://github.com/your-repo/proteognn" target="_blank">GitHub</a>
+                <a href="#" onclick="showDemo()">Demo</a>
+                <a href="#" onclick="showAbout()">About</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <!-- Upload Card -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">📁</div>
+                    <div class="card-title">Upload Structure</div>
+                </div>
+
+                <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+                    <div class="upload-icon">📤</div>
+                    <div class="upload-text">Drop PDB file here or click to browse</div>
+                    <div class="upload-hint">Supports .pdb and .cif formats</div>
+                </div>
+                <input type="file" id="fileInput" accept=".pdb,.cif" style="display: none;">
+
+                <div class="form-group" style="margin-top: 1rem;">
+                    <label class="form-label">Or fetch from RCSB PDB</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" class="form-input" id="pdbIdInput" placeholder="e.g., 5O3L" style="flex: 1;">
+                        <button class="btn btn-secondary" onclick="fetchPDB()">Fetch</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Chain ID</label>
+                    <input type="text" class="form-input" id="chainIdInput" value="A" placeholder="A">
+                </div>
+
+                <button class="btn btn-primary btn-full" id="analyzeBtn" onclick="runPrediction()">
+                    <span>🔬</span> Analyze Structure
+                </button>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">⚡</div>
+                    <div class="card-title">Example Proteins</div>
+                </div>
+                <div class="quick-actions">
+                    <button class="quick-btn" onclick="loadExample('5O3L')">
+                        <span class="quick-btn-icon">🧠</span>
+                        Tau (AD)
+                    </button>
+                    <button class="quick-btn" onclick="loadExample('6CU7')">
+                        <span class="quick-btn-icon">🔬</span>
+                        α-Synuclein
+                    </button>
+                    <button class="quick-btn" onclick="loadExample('2NAO')">
+                        <span class="quick-btn-icon">💊</span>
+                        Amyloid-β
+                    </button>
+                    <button class="quick-btn" onclick="showDemo()">
+                        <span class="quick-btn-icon">🎯</span>
+                        Demo Data
+                    </button>
+                </div>
+            </div>
+
+            <!-- Summary Stats -->
+            <div class="card" id="summaryCard" style="display: none;">
+                <div class="card-header">
+                    <div class="card-icon">📊</div>
+                    <div class="card-title">Summary</div>
+                </div>
+                <div id="summaryContent"></div>
+
+                <div class="color-legend">
+                    <div class="legend-item">
+                        <div class="legend-color high"></div>
+                        High Risk (>70%)
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color medium"></div>
+                        Medium (40-70%)
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color low"></div>
+                        Low Risk (<40%)
+                    </div>
+                </div>
+            </div>
+
+            <!-- Export -->
+            <div class="card" id="exportCard" style="display: none;">
+                <div class="card-header">
+                    <div class="card-icon">💾</div>
+                    <div class="card-title">Export Results</div>
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-secondary" onclick="exportCSV()" style="flex: 1;">
+                        <span>📄</span> CSV
+                    </button>
+                    <button class="btn btn-secondary" onclick="exportPyMOL()" style="flex: 1;">
+                        <span>🎨</span> PyMOL
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- 3D Viewer -->
+            <div class="viewer-container">
+                <div class="viewer-header">
+                    <div class="viewer-title">
+                        <span>🔮</span>
+                        <span id="viewerTitle">3D Structure Viewer</span>
+                    </div>
+                    <div class="viewer-controls">
+                        <button class="viewer-btn active" onclick="setStyle('cartoon')" id="btnCartoon">Cartoon</button>
+                        <button class="viewer-btn" onclick="setStyle('stick')" id="btnStick">Stick</button>
+                        <button class="viewer-btn" onclick="setStyle('sphere')" id="btnSphere">Sphere</button>
+                        <button class="viewer-btn" onclick="resetView()">Reset</button>
+                    </div>
+                </div>
+                <div id="viewer">
+                    <div class="viewer-placeholder" id="viewerPlaceholder">
+                        <div class="viewer-placeholder-icon">🧬</div>
+                        <h3>No Structure Loaded</h3>
+                        <p>Upload a PDB file or load an example to visualize</p>
+                    </div>
+                </div>
+                <div class="loading-overlay hidden" id="loadingOverlay">
+                    <div class="loading-spinner"></div>
+                    <div class="loading-text">Analyzing structure...</div>
+                </div>
+            </div>
+
+            <!-- Results Panel -->
+            <div class="results-panel" id="resultsPanel" style="display: none;">
+                <!-- Stats will be inserted here -->
+            </div>
+
+            <!-- Residue Table -->
+            <div class="residue-table-container" id="residueTableContainer" style="display: none;">
+                <div class="table-header">
+                    <div class="table-title">Residue Predictions</div>
+                    <input type="text" class="table-search" id="tableSearch" placeholder="Search residues..." oninput="filterTable()">
+                </div>
+                <div class="table-scroll">
+                    <table class="residue-table">
+                        <thead>
+                            <tr>
+                                <th>Residue</th>
+                                <th>Name</th>
+                                <th>Probability</th>
+                                <th style="width: 150px;">Score</th>
+                                <th>Risk Level</th>
+                            </tr>
+                        </thead>
+                        <tbody id="residueTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+        // Global state
+        let viewer = null;
+        let currentPDBContent = null;
+        let currentResults = null;
+        let currentStyle = 'cartoon';
+
+        // Initialize 3Dmol viewer
+        function initViewer() {
+            const element = document.getElementById('viewer');
+            const placeholder = document.getElementById('viewerPlaceholder');
+
+            if (placeholder) {
+                placeholder.style.display = 'none';
+            }
+
+            viewer = $3Dmol.createViewer(element, {
+                backgroundColor: 'black',
+                antialias: true
+            });
+        }
+
+        // File upload handling
+        document.getElementById('uploadZone').addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.currentTarget.classList.add('dragover');
+        });
+
+        document.getElementById('uploadZone').addEventListener('dragleave', (e) => {
+            e.currentTarget.classList.remove('dragover');
+        });
+
+        document.getElementById('uploadZone').addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.currentTarget.classList.remove('dragover');
+
+            const file = e.dataTransfer.files[0];
+            if (file) {
+                handleFile(file);
+            }
+        });
+
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                handleFile(file);
+            }
+        });
+
+        function handleFile(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                currentPDBContent = e.target.result;
+                showToast('File loaded successfully', 'success');
+                document.querySelector('.upload-text').textContent = file.name;
+            };
+            reader.readAsText(file);
+        }
+
+        // Fetch PDB from RCSB
+        async function fetchPDB() {
+            const pdbId = document.getElementById('pdbIdInput').value.trim();
+            if (!pdbId) {
+                showToast('Please enter a PDB ID', 'error');
+                return;
+            }
+
+            showLoading(true);
+
+            try {
+                const response = await fetch(`/api/fetch_pdb/${pdbId}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    currentPDBContent = data.content;
+                    document.querySelector('.upload-text').textContent = `${pdbId}.pdb`;
+                    showToast(`Loaded ${pdbId} from RCSB`, 'success');
+                } else {
+                    showToast(data.error || 'Failed to fetch PDB', 'error');
+                }
+            } catch (error) {
+                showToast('Network error fetching PDB', 'error');
+            }
+
+            showLoading(false);
+        }
+
+        // Load example structure
+        function loadExample(pdbId) {
+            document.getElementById('pdbIdInput').value = pdbId;
+            fetchPDB();
+        }
+
+        // Run prediction
+        async function runPrediction() {
+            if (!currentPDBContent) {
+                showToast('Please upload or fetch a PDB file first', 'error');
+                return;
+            }
+
+            const chainId = document.getElementById('chainIdInput').value || 'A';
+            showLoading(true);
+
+            try {
+                const response = await fetch('/api/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        pdb_content: currentPDBContent,
+                        chain_id: chainId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    currentResults = data;
+                    displayResults(data);
+                    visualizeStructure(data);
+                    showToast('Analysis complete!', 'success');
+                } else {
+                    showToast(data.error || 'Prediction failed', 'error');
+                }
+            } catch (error) {
+                showToast('Network error during prediction', 'error');
+                console.error(error);
+            }
+
+            showLoading(false);
+        }
+
+        // Show demo data
+        async function showDemo() {
+            showLoading(true);
+
+            try {
+                const response = await fetch('/api/demo');
+                const data = await response.json();
+
+                if (data.success) {
+                    currentResults = data;
+                    displayResults(data);
+                    // Generate demo PDB-like visualization
+                    visualizeDemoStructure(data);
+                    showToast('Demo data loaded!', 'info');
+                }
+            } catch (error) {
+                showToast('Failed to load demo', 'error');
+            }
+
+            showLoading(false);
+        }
+
+        // Display results
+        function displayResults(data) {
+            // Show summary card
+            document.getElementById('summaryCard').style.display = 'block';
+            document.getElementById('exportCard').style.display = 'block';
+
+            const summary = data.summary;
+            const total = data.num_residues;
+
+            const highPct = (summary.high_risk_count / total * 100).toFixed(1);
+            const medPct = (summary.medium_risk_count / total * 100).toFixed(1);
+            const lowPct = (summary.low_risk_count / total * 100).toFixed(1);
+
+            document.getElementById('summaryContent').innerHTML = `
+                <div style="margin-bottom: 1rem;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                        <span style="color: var(--text-muted); font-size: 0.8125rem;">Structure</span>
+                        <span style="font-family: 'JetBrains Mono'; font-weight: 500;">${data.structure_id}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                        <span style="color: var(--text-muted); font-size: 0.8125rem;">Chain</span>
+                        <span style="font-family: 'JetBrains Mono'; font-weight: 500;">${data.chain_id}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                        <span style="color: var(--text-muted); font-size: 0.8125rem;">Residues</span>
+                        <span style="font-family: 'JetBrains Mono'; font-weight: 500;">${data.num_residues}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="color: var(--text-muted); font-size: 0.8125rem;">Max Probability</span>
+                        <span style="font-family: 'JetBrains Mono'; font-weight: 500; color: var(--danger);">${(summary.max_probability * 100).toFixed(1)}%</span>
+                    </div>
+                </div>
+                <div class="risk-distribution">
+                    <div class="risk-bar high" style="width: ${highPct}%;" title="High risk: ${highPct}%"></div>
+                    <div class="risk-bar medium" style="width: ${medPct}%;" title="Medium risk: ${medPct}%"></div>
+                    <div class="risk-bar low" style="width: ${lowPct}%;" title="Low risk: ${lowPct}%"></div>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-top: 0.75rem; font-size: 0.75rem; color: var(--text-muted);">
+                    <span>🔴 ${summary.high_risk_count} high</span>
+                    <span>🟡 ${summary.medium_risk_count} medium</span>
+                    <span>🟢 ${summary.low_risk_count} low</span>
+                </div>
+            `;
+
+            // Results panel
+            document.getElementById('resultsPanel').style.display = 'grid';
+            document.getElementById('resultsPanel').innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <span class="stat-label">High Risk Residues</span>
+                        <span class="stat-badge high">Critical</span>
+                    </div>
+                    <div class="stat-value" style="color: var(--danger);">${summary.high_risk_count}</div>
+                    <div class="stat-description">Residues with >70% misfolding probability</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <span class="stat-label">Mean Probability</span>
+                        <span class="stat-badge medium">Average</span>
+                    </div>
+                    <div class="stat-value">${(summary.mean_probability * 100).toFixed(1)}%</div>
+                    <div class="stat-description">Average misfolding propensity across all residues</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <span class="stat-label">Low Risk Residues</span>
+                        <span class="stat-badge low">Stable</span>
+                    </div>
+                    <div class="stat-value" style="color: var(--success);">${summary.low_risk_count}</div>
+                    <div class="stat-description">Residues with <40% misfolding probability</div>
+                </div>
+            `;
+
+            // Residue table
+            document.getElementById('residueTableContainer').style.display = 'block';
+            const tbody = document.getElementById('residueTableBody');
+            tbody.innerHTML = '';
+
+            data.residues.forEach(res => {
+                const row = document.createElement('tr');
+                const probPct = (res.probability * 100).toFixed(1);
+                const color = res.risk_level === 'high' ? 'var(--danger)' :
+                              res.risk_level === 'medium' ? 'var(--warning)' : 'var(--success)';
+
+                row.innerHTML = `
+                    <td class="residue-name">${res.residue_id}</td>
+                    <td>${res.residue_name}</td>
+                    <td style="font-family: 'JetBrains Mono';">${probPct}%</td>
+                    <td>
+                        <div class="probability-bar">
+                            <div class="probability-fill" style="width: ${probPct}%; background: ${color};"></div>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="risk-indicator ${res.risk_level}">
+                            <span class="risk-dot"></span>
+                            ${res.risk_level.charAt(0).toUpperCase() + res.risk_level.slice(1)}
+                        </span>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            document.getElementById('viewerTitle').textContent = `3D Structure: ${data.structure_id} (Chain ${data.chain_id})`;
+        }
+
+        // Visualize structure with predictions
+        function visualizeStructure(data) {
+            if (!viewer) {
+                initViewer();
+            }
+
+            viewer.clear();
+
+            // Add the structure
+            viewer.addModel(currentPDBContent, 'pdb');
+
+            // Color by prediction
+            applyPredictionColoring(data);
+
+            viewer.zoomTo();
+            viewer.render();
+        }
+
+        // Demo visualization (without actual PDB)
+        function visualizeDemoStructure(data) {
+            if (!viewer) {
+                initViewer();
+            }
+
+            viewer.clear();
+
+            // Create a simple helix representation for demo
+            // In production, this would use actual coordinates
+            const numRes = data.residues.length;
+            let atoms = [];
+
+            for (let i = 0; i < numRes; i++) {
+                const res = data.residues[i];
+                const angle = i * 100 * Math.PI / 180;
+                const x = 2 * Math.cos(angle);
+                const y = 2 * Math.sin(angle);
+                const z = i * 1.5;
+
+                atoms.push({
+                    elem: 'C',
+                    x: x,
+                    y: y,
+                    z: z,
+                    serial: i,
+                    atom: 'CA',
+                    resn: res.residue_name,
+                    resi: res.residue_id,
+                    chain: 'A',
+                    b: res.probability * 100
+                });
+            }
+
+            // Add as a model
+            let m = viewer.addModel();
+            m.addAtoms(atoms);
+
+            // Color by B-factor (which we set to probability)
+            viewer.setStyle({}, {
+                cartoon: {
+                    colorfunc: function(atom) {
+                        const prob = atom.b / 100;
+                        if (prob > 0.7) return 'red';
+                        if (prob > 0.4) return 'yellow';
+                        return 'green';
+                    }
+                }
+            });
+
+            viewer.zoomTo();
+            viewer.render();
+        }
+
+        // Apply prediction coloring to structure
+        function applyPredictionColoring(data) {
+            if (!viewer || !data) return;
+
+            // Build residue-to-probability map
+            const probMap = {};
+            data.residues.forEach(res => {
+                probMap[res.residue_id] = res.probability;
+            });
+
+            const styleConfig = {};
+            styleConfig[currentStyle] = {
+                colorfunc: function(atom) {
+                    const prob = probMap[atom.resi] || 0;
+                    if (prob > 0.7) return '#ef4444';
+                    if (prob > 0.4) return '#f59e0b';
+                    return '#10b981';
+                }
+            };
+
+            viewer.setStyle({}, styleConfig);
+
+            // Highlight high-risk as sticks
+            const highRisk = data.residues
+                .filter(r => r.probability > 0.7)
+                .map(r => r.residue_id);
+
+            if (highRisk.length > 0) {
+                viewer.setStyle({resi: highRisk}, {
+                    ...styleConfig,
+                    stick: {radius: 0.2, color: '#ef4444'}
+                });
+            }
+
+            viewer.render();
+        }
+
+        // Set visualization style
+        function setStyle(style) {
+            currentStyle = style;
+
+            document.querySelectorAll('.viewer-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById(`btn${style.charAt(0).toUpperCase() + style.slice(1)}`).classList.add('active');
+
+            if (currentResults) {
+                applyPredictionColoring(currentResults);
+            } else if (viewer) {
+                const styleConfig = {};
+                styleConfig[style] = {color: 'spectrum'};
+                viewer.setStyle({}, styleConfig);
+                viewer.render();
+            }
+        }
+
+        // Reset view
+        function resetView() {
+            if (viewer) {
+                viewer.zoomTo();
+                viewer.render();
+            }
+        }
+
+        // Filter table
+        function filterTable() {
+            const query = document.getElementById('tableSearch').value.toLowerCase();
+            const rows = document.querySelectorAll('#residueTableBody tr');
+
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(query) ? '' : 'none';
+            });
+        }
+
+        // Export functions
+        async function exportCSV() {
+            if (!currentResults) {
+                showToast('No results to export', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/export/csv', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(currentResults)
+                });
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'proteognn_predictions.csv';
+                a.click();
+
+                showToast('CSV exported!', 'success');
+            } catch (error) {
+                showToast('Export failed', 'error');
+            }
+        }
+
+        async function exportPyMOL() {
+            if (!currentResults) {
+                showToast('No results to export', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/export/pymol', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(currentResults)
+                });
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'proteognn_visualization.pml';
+                a.click();
+
+                showToast('PyMOL script exported!', 'success');
+            } catch (error) {
+                showToast('Export failed', 'error');
+            }
+        }
+
+        // UI helpers
+        function showLoading(show) {
+            document.getElementById('loadingOverlay').classList.toggle('hidden', !show);
+            document.getElementById('analyzeBtn').disabled = show;
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `
+                <span>${type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ'}</span>
+                <span>${message}</span>
+            `;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.animation = 'slideIn 0.3s ease reverse';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function showAbout() {
+            showToast('ProteoGNN: GNN-based protein misfolding prediction for neurodegenerative diseases', 'info');
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('ProteoGNN Web App initialized');
+        });
+    </script>
+</body>
+</html>
