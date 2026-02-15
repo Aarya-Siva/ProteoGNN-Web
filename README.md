@@ -98,7 +98,7 @@ If you use ProteoGNN in your research, please cite:
 @software{proteognn2024,
   title = {ProteoGNN: Graph Neural Network for Protein Misfolding Prediction},
   year = {2024},
-  url = {https://github.com/your-repo/proteognn}
+  url = {https://github.com/Aarya-Siva/ProteoGNN-Web}
 }
 ```
 
